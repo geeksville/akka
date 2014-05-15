@@ -12,6 +12,7 @@ import akka.stream.FlowMaterializer
 import akka.stream.RecoveryTransformer
 import akka.stream.Transformer
 import akka.stream.impl.DuctImpl
+import akka.stream.impl.Ast
 
 object Duct {
 
@@ -231,6 +232,12 @@ trait Duct[In, +Out] {
    * broken down into individual processing steps.
    */
   def build(materializer: FlowMaterializer): (Consumer[In], Producer[Out] @uncheckedVariance)
+
+  /**
+   * INTERNAL API
+   * Need this for `Flow.append(duct)`.
+   */
+  private[akka] def ops: immutable.Seq[Ast.AstNode]
 
 }
 

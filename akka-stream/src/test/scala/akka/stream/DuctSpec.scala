@@ -167,6 +167,19 @@ class DuctSpec extends AkkaSpec {
       expectMsg("DONE")
     }
 
+    "be appendable to a Flow" in {
+      val c = StreamTestKit.consumerProbe[String]
+      val duct = Duct[Int].map(_ + 10).map(_.toString)
+      Flow(List(1, 2, 3)).map(_ * 2).append(duct).map((s: String) ⇒ "elem-" + s).produceTo(materializer, c)
+
+      val sub = c.expectSubscription
+      sub.requestMore(3)
+      c.expectNext("elem-12")
+      c.expectNext("elem-14")
+      c.expectNext("elem-16")
+      c.expectComplete
+    }
+
   }
 
 }

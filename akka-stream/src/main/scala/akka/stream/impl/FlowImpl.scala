@@ -30,6 +30,9 @@ private[akka] case class FlowImpl[I, O](producerNode: Ast.ProducerNode[I], ops: 
   // Storing ops in reverse order
   override protected def andThen[U](op: Ast.AstNode): Flow[U] = this.copy(ops = op :: ops)
 
+  override def append[U](duct: Duct[_ >: O, U]): Flow[U] =
+    copy(ops = duct.ops ++: ops)
+
   override def toFuture(materializer: FlowMaterializer): Future[O] = {
     val p = Promise[O]()
     transformRecover(new RecoveryTransformer[O, Unit] {
