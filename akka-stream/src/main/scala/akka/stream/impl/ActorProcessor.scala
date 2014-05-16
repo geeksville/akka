@@ -8,6 +8,9 @@ import org.reactivestreams.spi.Subscriber
 import akka.actor._
 import akka.stream.MaterializerSettings
 import akka.event.LoggingReceive
+import org.reactivestreams.api.Consumer
+import akka.stream.actor.ActorSubscriber
+import akka.stream.actor.ActorConsumer.{ OnNext, OnError, OnComplete, OnSubscribe }
 
 /**
  * INTERNAL API
@@ -30,7 +33,9 @@ private[akka] object ActorProcessor {
 /**
  * INTERNAL API
  */
-private[akka] class ActorProcessor[I, O]( final val impl: ActorRef) extends Processor[I, O] with ActorConsumerLike[I] with ActorProducerLike[O]
+private[akka] class ActorProcessor[I, O]( final val impl: ActorRef) extends Processor[I, O] with Consumer[I] with ActorProducerLike[O] {
+  override val getSubscriber: Subscriber[I] = new ActorSubscriber[I](impl)
+}
 
 /**
  * INTERNAL API

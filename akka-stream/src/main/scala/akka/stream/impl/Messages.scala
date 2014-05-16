@@ -5,18 +5,20 @@ package akka.stream.impl
 
 import org.reactivestreams.spi.Subscription
 
-// FIXME INTERNAL API
-
-case class OnSubscribe(subscription: Subscription)
-// TODO performance improvement: skip wrapping ordinary elements in OnNext
-case class OnNext(element: Any)
-case object OnComplete
-case class OnError(cause: Throwable)
-
-case object SubscribePending
-
+/**
+ * INTERNAL API
+ */
+private[akka] case object SubscribePending
+/**
+ * INTERNAL API
+ */
 case class RequestMore(subscription: ActorSubscription[_], demand: Int)
+/**
+ * INTERNAL API
+ */
 case class Cancel(subscriptions: ActorSubscription[_])
-
+/**
+ * INTERNAL API
+ */
 case class ExposedPublisher(publisher: ActorPublisher[Any])
 
