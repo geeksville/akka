@@ -200,9 +200,10 @@ class ActorConsumerSpec extends AkkaSpec with ImplicitSender {
       strat.requestDemand(4) should be(6)
     }
 
-    "implement MaxInFlight correctly" in {
+    "implement MaxInFlight with batchSize=1 correctly" in {
       var queue = Set.empty[String]
       val strat = new MaxInFlightRequestStrategy(max = 10) {
+        override def batchSize: Int = 1
         def inFlightInternally: Int = queue.size
       }
       strat.requestDemand(0) should be(10)
@@ -221,6 +222,50 @@ class ActorConsumerSpec extends AkkaSpec with ImplicitSender {
       queue += "g"
       strat.requestDemand(0) should be(0)
       strat.requestDemand(1) should be(0)
+    }
+
+    "implement MaxInFlight with batchSize=3 correctly" in {
+      var queue = Set.empty[String]
+      val strat = new MaxInFlightRequestStrategy(max = 10) {
+        override def batchSize: Int = 3
+        override def inFlightInternally: Int = queue.size
+      }
+      strat.requestDemand(0) should be(10)
+      queue += "a"
+      strat.requestDemand(9) should be(0)
+      queue += "b"
+      strat.requestDemand(8) should be(0)
+      queue += "c"
+      strat.requestDemand(7) should be(0)
+      queue += "d"
+      strat.requestDemand(6) should be(0)
+      queue -= "a" // 3 remaining in queue
+      strat.requestDemand(6) should be(0)
+      queue -= "b" // 2 remaining in queue
+      strat.requestDemand(6) should be(0)
+      queue -= "c" // 1 remaining in queue
+      strat.requestDemand(6) should be(3)
+    }
+
+    "implement MaxInFlight with batchSize=max correctly" in {
+      var queue = Set.empty[String]
+      val strat = new MaxInFlightRequestStrategy(max = 3) {
+        override def batchSize: Int = 5 // will be bounded to max
+        override def inFlightInternally: Int = queue.size
+      }
+      strat.requestDemand(0) should be(3)
+      queue += "a"
+      strat.requestDemand(2) should be(0)
+      queue += "b"
+      strat.requestDemand(1) should be(0)
+      queue += "c"
+      strat.requestDemand(0) should be(0)
+      queue -= "a"
+      strat.requestDemand(0) should be(0)
+      queue -= "b"
+      strat.requestDemand(0) should be(0)
+      queue -= "c"
+      strat.requestDemand(0) should be(3)
     }
 
   }

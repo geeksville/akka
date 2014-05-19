@@ -81,6 +81,7 @@ object ActorConsumer {
    * Requests up to the `max` and also takes the number of messages
    * that have been queued internally or delegated to other actors into account.
    * Concrete subclass must implement [[#inFlightInternally]].
+   * It will request elements in minimum batches of the defined [[#batchSize]].
    */
   abstract class MaxInFlightRequestStrategy(max: Int) extends RequestStrategy {
 
@@ -90,8 +91,18 @@ object ActorConsumer {
      */
     def inFlightInternally: Int
 
-    override def requestDemand(remainingRequested: Int): Int =
-      math.max(0, max - remainingRequested - inFlightInternally)
+    /**
+     * Elements will be request in minimum batches of this size.
+     * Default is 5. Subclass may override to define the batch size.
+     */
+    def batchSize: Int = 5
+
+    override def requestDemand(remainingRequested: Int): Int = {
+      val batch = math.min(batchSize, max)
+      if ((remainingRequested + inFlightInternally) <= (max - batch))
+        math.max(0, max - remainingRequested - inFlightInternally)
+      else 0
+    }
   }
 }
 
