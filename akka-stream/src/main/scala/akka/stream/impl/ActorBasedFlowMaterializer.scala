@@ -21,6 +21,7 @@ import akka.actor.ExtensionId
 import akka.actor.ExtendedActorSystem
 import akka.actor.ActorSystem
 import akka.actor.Extension
+import akka.stream.TimerTransformer
 
 /**
  * INTERNAL API
@@ -197,6 +198,15 @@ private[akka] class ActorBasedFlowMaterializer(
       case Nil ⇒
         new ActorConsumer[Any](context.actorOf(ActorConsumer.props(settings, blackholeTransform),
           name = s"$flowName-1-consume"))
+      case (head @ Transform(t: TimerTransformer[_, _])) :: tail ⇒
+        // FIXME remove this special case, but for some reason that I don't understand the FlowToFutureSpec
+        //       fails when doing this for all transformers.
+        //       I think we should remove the AbstractActorConsumer and TransformActorConsumer and make
+        //       some special BlackholeConsumer
+        val opsSize = ops.size
+        val c = new ActorConsumer[Any](context.actorOf(ActorConsumer.props(settings, blackholeTransform),
+          name = s"$flowName-${opsSize + 1}-consume"))
+        processorChain(c, ops, flowName, ops.size)
       case head :: tail ⇒
         val opsSize = ops.size
         val c = new ActorConsumer[Any](context.actorOf(ActorConsumer.props(settings, head),

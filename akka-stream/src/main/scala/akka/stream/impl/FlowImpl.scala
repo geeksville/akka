@@ -16,6 +16,8 @@ import scala.util.Failure
 import akka.stream.Transformer
 import org.reactivestreams.api.Consumer
 import akka.stream.scaladsl.Duct
+import scala.concurrent.duration.FiniteDuration
+import akka.stream.TimerTransformer
 
 /**
  * INTERNAL API
@@ -179,6 +181,23 @@ private[akka] trait Builder[Out] {
       override def name = "drop"
     })
 
+  def dropWithin(d: FiniteDuration): Thing[Out] =
+    transform(new TimerTransformer[Out, Out] {
+      scheduleOnce("dropWithinTimeout", d)
+
+      var delegate: Transformer[Out, Out] =
+        new Transformer[Out, Out] {
+          override def onNext(in: Out) = Nil
+        }
+
+      override def onNext(in: Out) = delegate.onNext(in)
+      override def onTimer(timerName: String) = {
+        delegate = identityTransformer.asInstanceOf[Transformer[Out, Out]]
+        Nil
+      }
+      override def name = "dropWithin"
+    })
+
   def take(n: Int): Thing[Out] =
     transform(new Transformer[Out, Out] {
       var delegate: Transformer[Out, Out] =
@@ -198,6 +217,24 @@ private[akka] trait Builder[Out] {
       override def name = "take"
     })
 
+  def takeWithin(d: FiniteDuration): Thing[Out] =
+    transform(new TimerTransformer[Out, Out] {
+      scheduleOnce("takeWithinTimeout", d)
+
+      var delegate: Transformer[Out, Out] =
+        new Transformer[Out, Out] {
+          override def onNext(in: Out) = List(in)
+        }
+
+      override def onNext(in: Out) = delegate.onNext(in)
+      override def isComplete = delegate.isComplete
+      override def onTimer(timerName: String) = {
+        delegate = takeCompletedTransformer.asInstanceOf[Transformer[Out, Out]]
+        Nil
+      }
+      override def name = "takeWithin"
+    })
+
   def grouped(n: Int): Thing[immutable.Seq[Out]] =
     transform(new Transformer[Out, immutable.Seq[Out]] {
       var buf: Vector[Out] = Vector.empty
@@ -212,6 +249,30 @@ private[akka] trait Builder[Out] {
       }
       override def onTermination(e: Option[Throwable]) = if (buf.isEmpty) Nil else List(buf)
       override def name = "grouped"
+    })
+
+  def groupedWithin(n: Int, d: FiniteDuration): Thing[immutable.Seq[Out]] =
+    transform(new TimerTransformer[Out, immutable.Seq[Out]] {
+      val timerName = "groupedWithinTimeout"
+      schedulePeriodically(timerName, d)
+      var buf: Vector[Out] = Vector.empty
+
+      override def onNext(in: Out) = {
+        buf :+= in; Nil
+        if (buf.size == n) {
+          // start new time window
+          schedulePeriodically(timerName, d)
+          emitGroup()
+        } else Nil
+      }
+      override def onTermination(e: Option[Throwable]) = if (buf.isEmpty) Nil else List(buf)
+      override def onTimer(timerName: String) = emitGroup()
+      private def emitGroup(): immutable.Seq[immutable.Seq[Out]] = {
+        val group = buf
+        buf = Vector.empty
+        List(group)
+      }
+      override def name = "groupedWithin"
     })
 
   def mapConcat[U](f: Out ⇒ immutable.Seq[U]): Thing[U] =

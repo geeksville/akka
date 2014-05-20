@@ -10,6 +10,7 @@ import akka.stream.MaterializerSettings
 import akka.event.LoggingReceive
 import java.util.Arrays
 import scala.util.control.NonFatal
+import akka.stream.TimerTransformer
 
 /**
  * INTERNAL API
@@ -18,6 +19,8 @@ private[akka] object ActorProcessor {
   import Ast._
   def props(settings: MaterializerSettings, op: AstNode): Props =
     (op match {
+      case Transform(transformer: TimerTransformer[_, _]) ⇒
+        Props(new TimerTransformerProcessorsImpl(settings, transformer))
       case t: Transform ⇒ Props(new TransformProcessorImpl(settings, t.transformer))
       case s: SplitWhen ⇒ Props(new SplitWhenProcessorImpl(settings, s.p))
       case g: GroupBy   ⇒ Props(new GroupByProcessorImpl(settings, g.f))

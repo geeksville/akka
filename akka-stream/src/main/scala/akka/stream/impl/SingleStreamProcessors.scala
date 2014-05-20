@@ -19,6 +19,11 @@ private[akka] class TransformProcessorImpl(_settings: MaterializerSettings, tran
   var emits = immutable.Seq.empty[Any]
   var errorEvent: Option[Throwable] = None
 
+  override def preStart(): Unit = {
+    super.preStart()
+    nextPhase(running)
+  }
+
   override def onError(e: Throwable): Unit = {
     try {
       transformer.onError(e)
@@ -32,7 +37,7 @@ private[akka] class TransformProcessorImpl(_settings: MaterializerSettings, tran
     def isCompleted = false
   }
 
-  val running: TransferPhase = TransferPhase(NeedsInputAndDemandOrCompletion) { () ⇒
+  private val runningPhase: TransferPhase = TransferPhase(NeedsInputAndDemandOrCompletion) { () ⇒
     if (primaryInputs.inputsDepleted || transformer.isComplete) {
       emits = transformer.onTermination(errorEvent)
       emitAndThen(completedPhase)
@@ -42,6 +47,8 @@ private[akka] class TransformProcessorImpl(_settings: MaterializerSettings, tran
       emitAndThen(running)
     }
   }
+
+  def running: TransferPhase = runningPhase
 
   // Save previous phase we should return to in a var to avoid allocation
   var phaseAfterFlush: TransferPhase = _
@@ -59,8 +66,6 @@ private[akka] class TransformProcessorImpl(_settings: MaterializerSettings, tran
     emits = emits.tail
     if (emits.isEmpty) nextPhase(phaseAfterFlush)
   }
-
-  nextPhase(running)
 
   override def toString: String = s"Transformer(emits=$emits, transformer=$transformer)"
 

@@ -18,6 +18,7 @@ import akka.stream.FlowMaterializer
 import akka.stream.scaladsl.{ Flow ⇒ SFlow }
 import akka.stream.Transformer
 import org.reactivestreams.api.Consumer
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * Java API
@@ -138,6 +139,11 @@ abstract class Flow[T] {
   def drop(n: Int): Flow[T]
 
   /**
+   * Discard the elements received within the given duration at beginning of the stream.
+   */
+  def dropWithin(d: FiniteDuration): Flow[T]
+
+  /**
    * Terminate processing (and cancel the upstream producer) after the given
    * number of elements. Due to input buffering some elements may have been
    * requested from upstream producers that will then not be processed downstream
@@ -146,10 +152,30 @@ abstract class Flow[T] {
   def take(n: Int): Flow[T]
 
   /**
+   * Terminate processing (and cancel the upstream producer) after the given
+   * duration. Due to input buffering some elements may have been
+   * requested from upstream producers that will then not be processed downstream
+   * of this step.
+   *
+   * Note that this can be combined with [[#take]] to limit the number of elements
+   * within the duration.
+   */
+  def takeWithin(d: FiniteDuration): Flow[T]
+
+  /**
    * Chunk up this stream into groups of the given size, with the last group
    * possibly smaller than requested due to end-of-stream.
    */
   def grouped(n: Int): Flow[java.util.List[T]]
+
+  /**
+   * Chunk up this stream into groups of elements received within a time window,
+   * or limited by the given number of elements, whatever happens first.
+   * Empty groups will be emitted if no elements are received from upstream.
+   * The last group before end-of-stream will contain the buffered elements
+   * since the previously emitted group.
+   */
+  def groupedWithin(n: Int, d: FiniteDuration): Flow[java.util.List[T]]
 
   /**
    * Transform each input element into a sequence of output elements that is
@@ -174,6 +200,9 @@ abstract class Flow[T] {
    * ordinary instance variables. The [[akka.stream.Transformer]] is executed by an actor and
    * therefore you do not have to add any additional thread safety or memory
    * visibility constructs to access the state from the callback methods.
+   *
+   * Note that you can use [[akka.stream.TimerTransformer]] if you need support
+   * for scheduled events in the transformer.
    */
   def transform[U](transformer: Transformer[T, U]): Flow[U]
 
@@ -321,10 +350,17 @@ private[akka] class FlowAdapter[T](delegate: SFlow[T]) extends Flow[T] {
 
   override def drop(n: Int): Flow[T] = new FlowAdapter(delegate.drop(n))
 
+  override def dropWithin(d: FiniteDuration): Flow[T] = new FlowAdapter(delegate.dropWithin(d))
+
   override def take(n: Int): Flow[T] = new FlowAdapter(delegate.take(n))
+
+  override def takeWithin(d: FiniteDuration): Flow[T] = new FlowAdapter(delegate.takeWithin(d))
 
   override def grouped(n: Int): Flow[java.util.List[T]] =
     new FlowAdapter(delegate.grouped(n).map(_.asJava)) // FIXME optimize to one step
+
+  override def groupedWithin(n: Int, d: FiniteDuration): Flow[java.util.List[T]] =
+    new FlowAdapter(delegate.groupedWithin(n, d).map(_.asJava)) // FIXME optimize to one step
 
   override def mapConcat[U](f: Function[T, java.util.List[U]]): Flow[U] =
     new FlowAdapter(delegate.mapConcat(elem ⇒ immutableSeq(f.apply(elem))))

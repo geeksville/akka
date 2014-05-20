@@ -49,27 +49,33 @@ public class FlowTest {
     final JavaTestKit probe = new JavaTestKit(system);
     final String[] lookup = { "a", "b", "c", "d", "e", "f" };
     final java.util.Iterator<Integer> input = Arrays.asList(0, 1, 2, 3, 4, 5).iterator();
-    Flow.create(input).drop(2).take(3).map(new Function<Integer, String>() {
-      public String apply(Integer elem) {
-        return lookup[elem];
-      }
-    }).filter(new Predicate<String>() {
-      public boolean test(String elem) {
-        return !elem.equals("c");
-      }
-    }).grouped(2).mapConcat(new Function<java.util.List<String>, java.util.List<String>>() {
-      public java.util.List<String> apply(java.util.List<String> elem) {
-        return elem;
-      }
-    }).fold("", new Function2<String, String, String>() {
-      public String apply(String acc, String elem) {
-        return acc + elem;
-      }
-    }).foreach(new Procedure<String>() {
-      public void apply(String elem) {
-        probe.getRef().tell(elem, ActorRef.noSender());
-      }
-    }).consume(materializer);
+    Flow.create(input).drop(2).take(3).takeWithin(FiniteDuration.create(10, TimeUnit.SECONDS))
+        .map(new Function<Integer, String>() {
+          public String apply(Integer elem) {
+            return lookup[elem];
+          }
+        }).filter(new Predicate<String>() {
+          public boolean test(String elem) {
+            return !elem.equals("c");
+          }
+        }).grouped(2).mapConcat(new Function<java.util.List<String>, java.util.List<String>>() {
+          public java.util.List<String> apply(java.util.List<String> elem) {
+            return elem;
+          }
+        }).groupedWithin(100, FiniteDuration.create(50, TimeUnit.MILLISECONDS))
+        .mapConcat(new Function<java.util.List<String>, java.util.List<String>>() {
+          public java.util.List<String> apply(java.util.List<String> elem) {
+            return elem;
+          }
+        }).fold("", new Function2<String, String, String>() {
+          public String apply(String acc, String elem) {
+            return acc + elem;
+          }
+        }).foreach(new Procedure<String>() {
+          public void apply(String elem) {
+            probe.getRef().tell(elem, ActorRef.noSender());
+          }
+        }).consume(materializer);
 
     probe.expectMsgEquals("de");
 
@@ -165,12 +171,15 @@ public class FlowTest {
 
       @Override
       public scala.collection.immutable.Seq<String> onTermination(Option<Throwable> e) {
-        if (e.isEmpty()) return Util.immutableSeq(new String[0]);
-        else return Util.immutableSingletonSeq(e.get().getMessage());
+        if (e.isEmpty())
+          return Util.immutableSeq(new String[0]);
+        else
+          return Util.immutableSingletonSeq(e.get().getMessage());
       }
 
       @Override
-      public void onError(Throwable e) {}
+      public void onError(Throwable e) {
+      }
 
       @Override
       public boolean isComplete() {
